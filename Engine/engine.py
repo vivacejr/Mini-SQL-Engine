@@ -4,9 +4,10 @@ import re
 from collections import OrderedDict
 
 METADATA_FILE = "../files/metadata.txt"
-agg_flag = 0;
-
+distinct_flag = 0
+agg_flag = 0
 def main():
+
 	dictionary = {}
 	dictionary2 = {}
 	getMetadata(dictionary)
@@ -61,6 +62,11 @@ def getTables(str, dictionary):
 def getColoumns(str, dictionary):
 	#removing select
 	str = str[7:]
+	print(str)
+	global distinct_flag  
+	if 'distinct' in str:
+		distinct_flag = distinct_flag + 1
+		str = ((str.split('distinct'))[1]).strip()
 	ret = str.split(',');
 	j=0
 	for i in ret:
@@ -107,6 +113,7 @@ def solve_columns(columns,qdict,qdict2):
 	cnt = 0
 	for x in columns :
 		if '(' in x : 
+			global agg_flag
 			agg_flag=1
 
 	#change all columns to tablename.columnname
@@ -150,6 +157,7 @@ def solve_columns(columns,qdict,qdict2):
 	qdict = tdict
 	qdict2 = tdict2
 	return qdict2
+
 
 def solve_where(where_object, qdict, qdict2):
 	and_flag = 0
@@ -344,13 +352,34 @@ def solve_where(where_object, qdict, qdict2):
 	qdict2=tdict2
 	return qdict2
 
+def rotate(qdict2):
+	tdict2 = []
+	cnt = 0
+	for x in qdict2[0]:
+		ary = []
+		for y in qdict2:
+			ary.append(y[cnt])
+		tdict2.append(ary)
+		cnt = cnt + 1
+	return tdict2
+
+def solve_distinct(qdict2):
+	tdict2 = []
+	for x in qdict2:
+		if x not in tdict2:
+			tdict2.append(x)
+	return tdict2
 
 def solve(query,dictionary, dictionary2):
+	global distinct_flag
+	global agg_flag
 	if "from" in query:
 		temp1 = query.split('from');
 	else:
 		sys.exit("Incorrect Syntax")		
 	column_object = temp1[0]
+	agg_flag = 0
+	distinct_flag=0
 	columns = getColoumns(column_object, dictionary)
 	
 	temp2 = temp1[1].split('where')
@@ -361,15 +390,23 @@ def solve(query,dictionary, dictionary2):
 		sys.exit("Zero Tables Provided")
 
 	#join
+	# print(columns)
 	qdict = []
 	qdict2 = []
 	qdict2=join(tables,dictionary,dictionary2,qdict,qdict2)
-
+	# print(qdict2)
 	qdict2= solve_columns(columns, qdict, qdict2)
-
 
 	where_object = temp2[1].strip()
 	qdict2=solve_where(where_object,qdict,qdict2)
+
+	# if agg_flag == 1:
+
+	if distinct_flag == 1 :
+		qdict2 = rotate(qdict2)
+		qdict2 = solve_distinct(qdict2)
+		qdict2 = rotate(qdict2)
+
 	print qdict
 	print qdict2
 
