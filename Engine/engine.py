@@ -62,7 +62,6 @@ def getTables(str, dictionary):
 def getColoumns(str, dictionary):
 	#removing select
 	str = str[7:]
-	print(str)
 	global distinct_flag  
 	if 'distinct' in str:
 		distinct_flag = distinct_flag + 1
@@ -149,14 +148,16 @@ def solve_columns(columns,qdict,qdict2):
 	tdict = []
 	tdict2 = []
 	cnt = 0 
-	for x in qdict:
+
+	tdict = qdict
+	qdict = []
+	for x in tdict:
 		if x in req:
-			tdict.append(x)
+			qdict.append(x)
 			tdict2.append(qdict2[cnt])
 		cnt = cnt +1 
-	qdict = tdict
 	qdict2 = tdict2
-	return qdict2
+	return qdict,qdict2
 
 
 def solve_where(where_object, qdict, qdict2):
@@ -169,9 +170,19 @@ def solve_where(where_object, qdict, qdict2):
 		temp = where_object.split('AND')
 		cond1 = temp[0].strip()
 		cond2 = temp[1].strip()
+	elif 'and' in where_object:
+		and_flag = 1
+		temp = where_object.split('and')
+		cond1 = temp[0].strip()
+		cond2 = temp[1].strip()
 	elif 'OR' in where_object:
 		or_flag = 1
-		temp = where_object.split('AND')
+		temp = where_object.split('OR')
+		cond1 = temp[0].strip()
+		cond2 = temp[1].strip()
+	elif 'or' in where_object:
+		or_flag = 1
+		temp = where_object.split('or')
 		cond1 = temp[0].strip()
 		cond2 = temp[1].strip()
 	else:
@@ -196,8 +207,8 @@ def solve_where(where_object, qdict, qdict2):
 	
 	col1lhs=temp1[0].strip()
 	col1rhs=temp1[1].strip()
-	if col1rhs[0].isdigit():
-		num_flag1=1
+	if col1rhs[0].isdigit() or col1rhs[0]=='-':
+		num_flag1 = 1
 		colid1rhs =  int(col1rhs)
 
 	cnt = 0  
@@ -230,6 +241,7 @@ def solve_where(where_object, qdict, qdict2):
 		elif '<' in cond1:
 			if num_flag1 == 1:
 				if int(qdict2[colid1lhs][cnt]) < colid1rhs:
+					print(cnt)
 					list1.append(cnt)
 			else :	
 				if int(qdict2[colid1lhs][cnt]) < int(qdict2[colid1rhs][cnt]):
@@ -279,7 +291,7 @@ def solve_where(where_object, qdict, qdict2):
 
 	col2lhs=temp2[0].strip()
 	col2rhs=temp2[1].strip()
-	if col2rhs[0].isdigit():
+	if col2rhs[0].isdigit() or col2rhs[0]=='-':
 		num_flag2 = 1
 		colid2rhs =  int(col2rhs)
 	cnt = 0  
@@ -313,9 +325,11 @@ def solve_where(where_object, qdict, qdict2):
 			if num_flag2 == 1:
 				if int(qdict2[colid2lhs][cnt]) < colid2rhs:
 					list2.append(cnt)
+					# print(cnt)
 			else :	
 				if int(qdict2[colid2lhs][cnt]) < int(qdict2[colid2rhs][cnt]):
 					list2.append(cnt)		
+					# print(cnt)
 		elif '<=' in cond2:
 			if num_flag2 == 1:
 				if int(qdict2[colid2lhs][cnt]) <= colid2rhs:
@@ -349,6 +363,7 @@ def solve_where(where_object, qdict, qdict2):
 		for y in list:
 			ary.append(x[y])
 		tdict2.append(ary)
+		
 	qdict2=tdict2
 	return qdict2
 
@@ -370,13 +385,41 @@ def solve_distinct(qdict2):
 			tdict2.append(x)
 	return tdict2
 
+def solve_aggregate(columns, qdict2):
+	tdict2 = []
+	cnt = 0
+	for x in columns:
+		cond = ((x.split('('))[0]).strip()
+		mx = 0
+		if len(qdict2[cnt]) == 0:
+			mx = "No rows"
+		elif 'max' in cond:
+			mx = max(qdict2[cnt])
+		elif 'min' in cond:
+			mx = min(qdict2[cnt])
+		elif 'sum' in cond:
+			mx = sum(qdict2[cnt])
+		else :
+			mx = max(qdict2[cnt])/len(qdict2[cnt])
+		ary = []
+		ary.append(mx)
+		tdict2.append(ary)
+		cnt = cnt + 1
+	return tdict2
+
+
 def solve(query,dictionary, dictionary2):
 	global distinct_flag
 	global agg_flag
+	if ';' not in query:
+		sys.exit('Query should end with semi-colon')
+	query = (query.split(';'))[0]
+	if 'select' not in query and 'Select' not in query and 'SELECT' not in query:
+		sys.exit('No select statement in query')
 	if "from" in query:
 		temp1 = query.split('from');
 	else:
-		sys.exit("Incorrect Syntax")		
+		sys.exit("Incorrect Syntax, from not found")		
 	column_object = temp1[0]
 	agg_flag = 0
 	distinct_flag=0
@@ -394,11 +437,14 @@ def solve(query,dictionary, dictionary2):
 	qdict = []
 	qdict2 = []
 	qdict2=join(tables,dictionary,dictionary2,qdict,qdict2)
-	# print(qdict2)
-	qdict2= solve_columns(columns, qdict, qdict2)
+	if columns[0] == '*':
+		columns = qdict
 
-	where_object = temp2[1].strip()
-	qdict2=solve_where(where_object,qdict,qdict2)
+	if len(temp2)>1:
+		where_object = temp2[1].strip()
+		qdict2=solve_where(where_object,qdict,qdict2)
+
+	qdict, qdict2= solve_columns(columns, qdict, qdict2)
 
 	# if agg_flag == 1:
 
@@ -406,6 +452,11 @@ def solve(query,dictionary, dictionary2):
 		qdict2 = rotate(qdict2)
 		qdict2 = solve_distinct(qdict2)
 		qdict2 = rotate(qdict2)
+	
+	if agg_flag == 1 :
+		# print(columns)
+		qdict2 = solve_aggregate(columns, qdict2)
+
 
 	print qdict
 	print qdict2
