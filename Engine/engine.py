@@ -2,10 +2,13 @@ import csv
 import sys
 import re
 from collections import OrderedDict
-
+from copy import deepcopy
 METADATA_FILE = "../files/metadata.txt"
 distinct_flag = 0
 agg_flag = 0
+join_flag = 0
+join_c1 = ""
+join_c2 = ""
 def main():
 
 	dictionary = {}
@@ -79,15 +82,14 @@ def join(tables, dictionary,dictionary2,qdict,qdict2):
 		if f == 0:
 			for x in dictionary[tab]:
 				qdict.append(x)
-			qdict2=dictionary2[tab]
+			qdict2=deepcopy(dictionary2[tab])
 			f = 1
 		else :
 			tdict = []
-			tdict2 = []
 			for x in dictionary[tab]:
 				tdict.append(x)
 				qdict.append(x)
-			tdict2=dictionary2[tab]
+			tdict2=deepcopy(dictionary2[tab])
 			n = len(qdict2[0])
 			m = len(tdict2[1])
 			cnt = 0
@@ -97,6 +99,8 @@ def join(tables, dictionary,dictionary2,qdict,qdict2):
 						qdict2[cnt].append(qdict2[cnt][i%n])
 				cnt = cnt + 1
 			cnt= 0
+			# print(n)
+			# print(m)
 			for x in tdict2:
 				ary = []
 				for i in range(n*m):
@@ -108,7 +112,6 @@ def join(tables, dictionary,dictionary2,qdict,qdict2):
 def solve_columns(columns,qdict,qdict2):
 	req = []
 	req2 = []
-
 	cnt = 0
 	for x in columns :
 		if '(' in x : 
@@ -122,6 +125,7 @@ def solve_columns(columns,qdict,qdict2):
 				sys.exit("Invalid column names")	
 			else:
 				col = ((x.split('('))[1].split(')'))[0]
+				
 				if '.' not in col :
 					for val in qdict:
 						z = (val.split('.'))[1]
@@ -130,6 +134,7 @@ def solve_columns(columns,qdict,qdict2):
 				if '.' not in col :
 					sys.exit("Invalid column names")
 				columns[cnt]=(x.split('('))[0] + '(' + col + ')' 
+				# print col
 				req.append(col)
 		else :
 			col = x
@@ -148,8 +153,9 @@ def solve_columns(columns,qdict,qdict2):
 	tdict = []
 	tdict2 = []
 	cnt = 0 
-
+	# print req
 	tdict = qdict
+	# print tdict
 	qdict = []
 	for x in tdict:
 		if x in req:
@@ -221,6 +227,7 @@ def solve_where(where_object, qdict, qdict2):
 				colid1rhs = cnt			
 		cnt = cnt + 1
 
+
 	list1 = []
 	cnt = 0
 	for i in qdict2[0]:
@@ -241,7 +248,7 @@ def solve_where(where_object, qdict, qdict2):
 		elif '<' in cond1:
 			if num_flag1 == 1:
 				if int(qdict2[colid1lhs][cnt]) < colid1rhs:
-					print(cnt)
+					# print(cnt)
 					list1.append(cnt)
 			else :	
 				if int(qdict2[colid1lhs][cnt]) < int(qdict2[colid1rhs][cnt]):
@@ -258,8 +265,14 @@ def solve_where(where_object, qdict, qdict2):
 				if int(qdict2[colid1lhs][cnt]) == colid1rhs:
 					list1.append(cnt)
 			else :	
+				global join_flag 
+				global join_c1
+				global join_c2
+				join_flag = 1
+				join_c1 = col1lhs
+				join_c2 = col1rhs
 				if qdict2[colid1lhs][cnt] == qdict2[colid1rhs][cnt]:
-					list1.append(cnt)				
+					list1.append(cnt)
 		cnt = cnt + 1
 
 	if and_flag == 0 and or_flag == 0:
@@ -387,10 +400,12 @@ def solve_distinct(qdict2):
 
 def solve_aggregate(columns, qdict2):
 	tdict2 = []
+	for i in range(0,len(qdict2)):
+		for j in range(0, len(qdict2[i])):
+			qdict2[i][j]=float(qdict2[i][j])
 	cnt = 0
 	for x in columns:
 		cond = ((x.split('('))[0]).strip()
-		mx = 0
 		if len(qdict2[cnt]) == 0:
 			mx = "No rows"
 		elif 'max' in cond:
@@ -400,7 +415,7 @@ def solve_aggregate(columns, qdict2):
 		elif 'sum' in cond:
 			mx = sum(qdict2[cnt])
 		else :
-			mx = max(qdict2[cnt])/len(qdict2[cnt])
+			mx = sum(qdict2[cnt])/len(qdict2[cnt])
 		ary = []
 		ary.append(mx)
 		tdict2.append(ary)
@@ -444,8 +459,11 @@ def solve(query,dictionary, dictionary2):
 		where_object = temp2[1].strip()
 		qdict2=solve_where(where_object,qdict,qdict2)
 
+	# if '*' in columns and len(columns) != 1:
+		# sys.exit('invalid query')
+	# print columns , qdict
 	qdict, qdict2= solve_columns(columns, qdict, qdict2)
-
+	# print columns , qdict
 	# if agg_flag == 1:
 
 	if distinct_flag == 1 :
@@ -456,10 +474,28 @@ def solve(query,dictionary, dictionary2):
 	if agg_flag == 1 :
 		# print(columns)
 		qdict2 = solve_aggregate(columns, qdict2)
+		qdict = columns
 
+	# print qdict
+	global join_flag
+	global join_c1
+	global join_c2
+	for x in qdict:
+		if join_flag == 1: 
+			if x != join_c2:
+				print x,
+		else:
+			print x,
+	print
+	for i in range(0, len(qdict2[0])):
+		for j in range(0, len(qdict2)):
+			if join_flag == 1:
+				if qdict[j] != join_c2:
+					print qdict2[j][i],
+			else:
+				print qdict2[j][i],
 
-	print qdict
-	print qdict2
+		print
 
 
 
